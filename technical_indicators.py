@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import yfinance as yf
+import matplotlib.pyplot as plt
 from plotly.subplots import make_subplots
 
 def MACD(nifty_50):
@@ -217,3 +218,116 @@ def candlestick_chart(df, plot_EMAs=True, plot_MACD=True):
     fig.update_yaxes(title_text='Price ($)')
 
     return fig
+
+def prepare_test_set(df):
+  X = df.drop(columns=["Date", "Close"])
+  y = df["Close"]
+  date_column = df["Date"]
+  X_test, y_test = X, y
+  print(X_test)
+  return X_test, y_test, date_column
+
+def prepare_test_set_lstm(df):
+  X = df.drop(columns=["Date", "Close"])
+  y = df["Close"]
+  date_column = df["Date"]
+  columns = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'EMA_9',
+       'SMA_5', 'SMA_10', 'SMA_15', 'SMA_30', 'RSI', 'MACD', 'MACD_signal'] 
+  test_X, test_y = df[columns], df['Close']
+    # reshape input to be 3D
+  test_X, test_y = np.array(test_X), np.array(test_y)
+  test_X = test_X.reshape((test_X.shape[0], test_X.shape[1], 1))
+
+  return test_X, test_y, date_column
+
+
+def moving_avg_features(df):
+  """
+      Function to calculate the exponential moving averages and moving averages over different intervals of days
+      Input: Dataframe
+      Output: Dataframe with new moving average features
+  """
+
+  df['EMA_9'] = df['Close'].ewm(9).mean().shift()
+  df['EMA_9'] = df['EMA_9'].fillna(0)
+  df['SMA_5'] = df['Close'].rolling(5).mean().shift()
+  df['SMA_5'] = df['SMA_5'].fillna(0)
+  df['SMA_10'] = df['Close'].rolling(10).mean().shift()
+  df['SMA_10'] = df['SMA_10'].fillna(0)
+  df['SMA_15'] = df['Close'].rolling(15).mean().shift()
+  df['SMA_15'] = df['SMA_15'].fillna(0)
+  df['SMA_30'] = df['Close'].rolling(30).mean().shift()
+  df['SMA_30'] = df['SMA_30'].fillna(0)
+  return df
+
+def relative_strength_idx(df, column='Close', time_window=14):
+
+    """Function to make the RSI values for a given stock dataframe"""
+
+    # Differential between the Column
+    diff = df[column].diff(1)
+
+    # Integrity of the difference values
+    up_chg = 0 * diff
+    down_chg = 0 * diff
+
+    # We consider the upchange as positive difference, otherwise keep it as zero
+    up_chg[diff > 0] = diff[diff > 0]
+
+    down_chg[diff < 0] = diff[diff < 0]
+
+    # We set change of time_window-1 so our decay is alpha=1/time_window.
+    up_chg_avg = up_chg.ewm(com=time_window - 1,
+                            min_periods=time_window).mean()
+    down_chg_avg = down_chg.ewm(com=time_window - 1,
+                                min_periods=time_window).mean()
+
+    RS = abs(up_chg_avg / down_chg_avg)
+    df['RSI'] = 100 - 100 / (1 + RS)
+
+    return df
+
+def macd_signal(df):
+  """
+      Function to compute the MACD signals
+        Input: Dataframe
+        Output: Dataframe with MACD signal feature
+  """
+    # MACD signals are calculated over a period of 12 and 26 days respectively
+  EMA_12 = pd.Series(df['Close'].ewm(span=12, min_periods=12).mean())
+  EMA_26 = pd.Series(df['Close'].ewm(span=26, min_periods=26).mean())
+    # Trace the momentum of the Moving Averages
+  df['MACD'] = pd.Series(EMA_12 - EMA_26)
+  df['MACD'] = df['MACD'].fillna(0)
+    # Finally generate a signal over a span of 9 days using the differences
+  df['MACD_signal'] = pd.Series(df.MACD.ewm(span=9, min_periods=9).mean())
+  df['MACD_signal'] = df['MACD_signal'].fillna(0)
+  return df
+
+def add_features(df):
+    """
+        Function to create new features in the dataframe
+    """
+    df = moving_avg_features(df)
+    df = relative_strength_idx(df).fillna(0)
+    df = macd_signal(df)
+    # Scale Features
+    columns = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'EMA_9',
+       'SMA_5', 'SMA_10', 'SMA_15', 'SMA_30', 'RSI', 'MACD', 'MACD_signal']
+    for i in columns:
+        df[i] = (df[i] - df[i].mean())/(df[i].std())
+
+    return df
+
+def get_test_data(symbol):
+  df = yf.download(symbol, start="2021-11-01", end=None)
+  df = df.reset_index()
+  return df
+
+def plot_price(date_column, y_pred, y_test):
+    plt.plot(date_column, y_pred, color='green', marker='o', linestyle='dashed', label='Predicted Price')
+    plt.plot(date_column, y_test, color='red', label='Actual Price')
+    plt.title('Prices Prediction')
+    plt.xlabel('Dates')
+    plt.ylabel('Prices')
+    plt.legend()
