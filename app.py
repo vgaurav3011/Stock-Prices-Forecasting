@@ -6,7 +6,12 @@ import yfinance as yf
 from nsepy import get_history
 from datetime import date
 import technical_indicators as ti
+import xgboost as xgb
+from sklearn import metrics
 
+import warnings
+warnings.filterwarnings("ignore")
+st.set_option('deprecation.showPyplotGlobalUse', False)
 
 # Preprocessing Module
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
@@ -26,11 +31,8 @@ import base64
 import sys
 from datetime import datetime
 import os 
-from functools import reduce
-import glob
 from IPython.display import display, HTML
-from tqdm import tqdm_notebook as tqdm
-import json
+from tensorflow.keras.models import load_model
 
 
 # Visualization Libraries
@@ -85,9 +87,9 @@ if choices == 'Exploratory Data Analysis':
     st.subheader('Stock Prices Features and Assessment')
     st.sidebar.success("Explore end to end!")
 
-    st.image(Image.open("assets/images/market.gif"))
+    st.image(Image.open("assets/images/market.jpg"))
     option = st.selectbox('Select the Stock: ',
-    ('Infosys', 'Tech Mahindra', 'Hexaware Technologies', 'Wipro', 'Tata Elxsi', 'NIIT', 'TCS', 'Mindtree', 'Justdial'))
+    ('Infosys', 'Tech Mahindra', 'HCL', 'Wipro', 'Tata Elxsi', 'NIIT', 'TCS', 'Mindtree', 'Justdial'))
     
     st.write('Your Selection: ', option)
     
@@ -763,71 +765,260 @@ if choices == 'Exploratory Data Analysis':
 
 
 
-elif choices == 'Train Your Own Drogon (Machine Learning Models)':
-    st.subheader('Train Machine Learning Models for Stock Prediction & Generate your own Buy/Sell Signals using the best Model')
-    st.sidebar.success("The most valuable commodity I know of is information.")
+elif choices == 'Forecasting Prices':
+    st.subheader('Stock Prices Forecasting')
+    st.sidebar.success("Explore the ML forecasts!!")
 
+    st.image(Image.open("assets/images/market.jpg"))
+    option = st.selectbox('Select the Stock: ',
+    ('Infosys', 'Tech Mahindra', 'HCL', 'Wipro', 'Tata Elxsi', 'NIIT', 'TCS', 'Mindtree', 'Justdial'))
     
-    st.markdown('**_Real_ _Time_ ML Training** for any Stocks')
-    st.write('We have created this pipeline for multiple Model training on Multiple stocks at the same time and evaluating them')
+    st.write('Your Selection: ', option)
+    
 
-    
-    st.write('Make sure you have Extracted features for the Stocks you want to train models on using first Tab')
-    
-    result = glob.glob( '*.csv' )
-    #st.write( result )
-    stock = []
-    for val in result:
-        stock.append(val.split('.')[0])
-    
-    st.markdown('**_Recently_ _Extracted_ Stocks** -')
-    st.write(stock[:5])
-    cols1 = ['NKE', 'JNJ']
-    st.markdown('**_Select_ _Stocks_ _to_ Train**')
-    Stocks = st.multiselect("", stock, default=cols1)
-    
-    options = ['Linear Regression', 'Random Forest', 'XGBoost']
-    cols2 = ['Linear Regression', 'Random Forest']
-    st.markdown('**_Select_ _Machine_ _Learning_ Algorithms** to Train')
-    models = st.multiselect("", options, default=cols2)
-    
-    
-    file = './' + stock[0] + '.csv'
-    df_stock = pd.read_csv(file)
-    df_stock = df_stock.drop(columns=['Date', 'Date_col'])
-    #st.write(df_stock.columns)
-    st.markdown('Select from your **_Extracted_ features** or use default')
-    st.write('Select all Extracted features')
-    all_features = st.checkbox('Select all Extracted features')
-    cols = ['Open', 'High', 'Low', 'Close(t)', 'Upper_Band', 'MA200', 'ATR', 'ROC', 'QQQ_Close', 'SnP_Close', 'DJIA_Close', 'DJIA(t-5)']
-    if all_features:
-        cols = df_stock.columns.tolist()
-        cols.pop(len(df_stock.columns)-1)
+    if not option:
+            pass
+    else:
 
-    features = st.multiselect("", df_stock.columns.tolist(), default=cols)
-    
-    
-    submit = st.button('Train Your DROGON')
-    if submit:
-        try:
-            training = Stock_Prediction_Modeling(Stocks, models, features)
-            training.pipeline_sequence()
-            with open('./metrics.txt') as f:
-                eval_metrics = json.load(f)
-
+        if option == "Infosys":
+            stock_sticker = "INFY"
+            df = ti.get_test_data(stock_sticker)            
+            df = ti.add_features(df)
+            X_test, y_test, date_column = ti.prepare_test_set(df)
+            model_xgb = pickle.load(open("assets/models/infy_xgb.pickle.dat", "rb"))
             
+            y_pred = model_xgb.predict(X_test)
+            fig, ax = plt.subplots(figsize=(15,5))
+            fig = (ti.plot_price(date_column, y_pred, y_test))
+            st.pyplot(fig)
 
-        except:
-            st.markdown('There seems to be a error - **_check_ logs**')
-            print("Unexpected error:", sys.exc_info())
-            print()
+            st.write(f'__Root Mean Squared Error__ = {np.sqrt(metrics.mean_squared_error(y_test, y_pred))}')
+            st.write(f'__Mean Absolute Percentage Error__ = {np.sqrt(metrics.mean_absolute_percentage_error(y_test, y_pred))}')
+            st.subheader("__RSI__")
+            fig = ti.plot_RSI(df)
+            st.plotly_chart(fig)
+            st.subheader("__OHLC Chart__")
+            fig = ti.ohlc_plot(df)
+            st.plotly_chart(fig)
+            st.subheader("__MACD__")
+            fig = ti.MACD(df)
+            st.plotly_chart(fig)
+            st.subheader("__Trading Strategy__")
+            fig = ti.candlestick_chart(df)
+            st.plotly_chart(fig)
+        
+        if option == "Tech Mahindra":
+            stock_sticker = "TECHM.NS"
+            df = ti.get_test_data(stock_sticker)            
+            df = ti.add_features(df)
+            X_test, y_test, date_column = ti.prepare_test_set(df)
+            model_xgb = pickle.load(open("assets/models/techm_xgb.pickle.dat", "rb"))
+            
+            y_pred = model_xgb.predict(X_test)
+            fig, ax = plt.subplots(figsize=(15,5))
+            fig = (ti.plot_price(date_column, y_pred, y_test))
+            st.pyplot(fig)
 
-    
-        Metrics = pd.DataFrame.from_dict({(i,j): eval_metrics[i][j] 
-                               for i in eval_metrics.keys() 
-                               for j in eval_metrics[i].keys()},
-                           orient='index')
+            st.write(f'__Root Mean Squared Error__ = {np.sqrt(metrics.mean_squared_error(y_test, y_pred))}')
+            st.write(f'__Mean Absolute Percentage Error__ = {np.sqrt(metrics.mean_absolute_percentage_error(y_test, y_pred))}')
+            st.subheader("__RSI__")
+            fig = ti.plot_RSI(df)
+            st.plotly_chart(fig)
+            st.subheader("__OHLC Chart__")
+            fig = ti.ohlc_plot(df)
+            st.plotly_chart(fig)
+            st.subheader("__MACD__")
+            fig = ti.MACD(df)
+            st.plotly_chart(fig)
+            st.subheader("__Trading Strategy__")
+            fig = ti.candlestick_chart(df)
+            st.plotly_chart(fig)
 
-        st.write(Metrics)
-    
-    
+        if option == "Justdial":
+            stock_sticker = "JUSTDIAL.NS"
+            df = ti.get_test_data(stock_sticker)            
+            df = ti.add_features(df)
+            X_test, y_test, date_column = ti.prepare_test_set(df)
+            model_xgb = pickle.load(open("assets/models/jd_xgb.pickle.dat", "rb"))
+            
+            y_pred = model_xgb.predict(X_test)
+            fig, ax = plt.subplots(figsize=(15,5))
+            fig = (ti.plot_price(date_column, y_pred, y_test))
+            st.pyplot(fig)
+
+            st.write(f'__Root Mean Squared Error__ = {np.sqrt(metrics.mean_squared_error(y_test, y_pred))}')
+            st.write(f'__Mean Absolute Percentage Error__ = {np.sqrt(metrics.mean_absolute_percentage_error(y_test, y_pred))}')
+            st.subheader("__RSI__")
+            fig = ti.plot_RSI(df)
+            st.plotly_chart(fig)
+            st.subheader("__OHLC Chart__")
+            fig = ti.ohlc_plot(df)
+            st.plotly_chart(fig)
+            st.subheader("__MACD__")
+            fig = ti.MACD(df)
+            st.plotly_chart(fig)
+            st.subheader("__Trading Strategy__")
+            fig = ti.candlestick_chart(df)
+            st.plotly_chart(fig)
+
+        if option == "HCL":
+            stock_sticker = "HCLTECH.NS"
+            df = ti.get_test_data(stock_sticker)            
+            df = ti.add_features(df)
+            X_test, y_test, date_column = ti.prepare_test_set(df)
+            model_xgb = pickle.load(open("assets/models/hcl_xgb.pickle.dat", "rb"))
+            
+            y_pred = model_xgb.predict(X_test)
+            fig, ax = plt.subplots(figsize=(15,5))
+            fig = (ti.plot_price(date_column, y_pred, y_test))
+            st.pyplot(fig)
+
+            st.write(f'__Root Mean Squared Error__ = {np.sqrt(metrics.mean_squared_error(y_test, y_pred))}')
+            st.write(f'__Mean Absolute Percentage Error__ = {np.sqrt(metrics.mean_absolute_percentage_error(y_test, y_pred))}')
+            st.subheader("__RSI__")
+            fig = ti.plot_RSI(df)
+            st.plotly_chart(fig)
+            st.subheader("__OHLC Chart__")
+            fig = ti.ohlc_plot(df)
+            st.plotly_chart(fig)
+            st.subheader("__MACD__")
+            fig = ti.MACD(df)
+            st.plotly_chart(fig)
+            st.subheader("__Trading Strategy__")
+            fig = ti.candlestick_chart(df)
+            st.plotly_chart(fig)
+
+        if option == "Tata Elxsi":
+            stock_sticker = "TATAELXSI.NS"
+            df = ti.get_test_data(stock_sticker)            
+            df = ti.add_features(df)
+            X_test, y_test, date_column = ti.prepare_test_set_lstm(df)
+            model = load_model("assets/models/telx_model.h5")
+            
+            y_pred = model.predict(X_test)
+            fig, ax = plt.subplots(figsize=(15,5))
+            fig = (ti.plot_price(date_column, y_pred, y_test))
+            st.pyplot(fig)
+
+            st.write(f'__Root Mean Squared Error__ = {np.sqrt(metrics.mean_squared_error(y_test, y_pred))}')
+            st.write(f'__Mean Absolute Percentage Error__ = {np.sqrt(metrics.mean_absolute_percentage_error(y_test, y_pred))}')
+            st.subheader("__RSI__")
+            fig = ti.plot_RSI(df)
+            st.plotly_chart(fig)
+            st.subheader("__OHLC Chart__")
+            fig = ti.ohlc_plot(df)
+            st.plotly_chart(fig)
+            st.subheader("__MACD__")
+            fig = ti.MACD(df)
+            st.plotly_chart(fig)
+            st.subheader("__Trading Strategy__")
+            fig = ti.candlestick_chart(df)
+            st.plotly_chart(fig)
+        
+        if option == "Wipro":
+            stock_sticker = "WIPRO.NS"
+            df = ti.get_test_data(stock_sticker)            
+            df = ti.add_features(df)
+            X_test, y_test, date_column = ti.prepare_test_set_lstm(df)
+            model = load_model("assets/models/wipro_model.h5")
+            
+            y_pred = model.predict(X_test)
+            fig, ax = plt.subplots(figsize=(15,5))
+            fig = (ti.plot_price(date_column, y_pred, y_test))
+            st.pyplot(fig)
+
+            st.write(f'__Root Mean Squared Error__ = {np.sqrt(metrics.mean_squared_error(y_test, y_pred))}')
+            st.write(f'__Mean Absolute Percentage Error__ = {np.sqrt(metrics.mean_absolute_percentage_error(y_test, y_pred))}')
+            st.subheader("__RSI__")
+            fig = ti.plot_RSI(df)
+            st.plotly_chart(fig)
+            st.subheader("__OHLC Chart__")
+            fig = ti.ohlc_plot(df)
+            st.plotly_chart(fig)
+            st.subheader("__MACD__")
+            fig = ti.MACD(df)
+            st.plotly_chart(fig)
+            st.subheader("__Trading Strategy__")
+            fig = ti.candlestick_chart(df)
+            st.plotly_chart(fig)
+        
+        if option == "NIIT":
+            stock_sticker = "NIITLTD.NS"
+            df = ti.get_test_data(stock_sticker)            
+            df = ti.add_features(df)
+            X_test, y_test, date_column = ti.prepare_test_set_lstm(df)
+            model = load_model("assets/models/niit.h5")
+            
+            y_pred = model.predict(X_test)
+            fig, ax = plt.subplots(figsize=(15,5))
+            fig = (ti.plot_price(date_column, y_pred, y_test))
+            st.pyplot(fig)
+
+            st.write(f'__Root Mean Squared Error__ = {np.sqrt(metrics.mean_squared_error(y_test, y_pred))}')
+            st.write(f'__Mean Absolute Percentage Error__ = {np.sqrt(metrics.mean_absolute_percentage_error(y_test, y_pred))}')
+            st.subheader("__RSI__")
+            fig = ti.plot_RSI(df)
+            st.plotly_chart(fig)
+            st.subheader("__OHLC Chart__")
+            fig = ti.ohlc_plot(df)
+            st.plotly_chart(fig)
+            st.subheader("__MACD__")
+            fig = ti.MACD(df)
+            st.plotly_chart(fig)
+            st.subheader("__Trading Strategy__")
+            fig = ti.candlestick_chart(df)
+            st.plotly_chart(fig)
+        
+        if option == "TCS":
+            stock_sticker = "TCS.NS"
+            df = ti.get_test_data(stock_sticker)            
+            df = ti.add_features(df)
+            X_test, y_test, date_column = ti.prepare_test_set_lstm(df)
+            model = load_model("assets/models/tcs.h5")
+            
+            y_pred = model.predict(X_test)
+            fig, ax = plt.subplots(figsize=(15,5))
+            fig = (ti.plot_price(date_column, y_pred, y_test))
+            st.pyplot(fig)
+
+            st.write(f'__Root Mean Squared Error__ = {np.sqrt(metrics.mean_squared_error(y_test, y_pred))}')
+            st.write(f'__Mean Absolute Percentage Error__ = {np.sqrt(metrics.mean_absolute_percentage_error(y_test, y_pred))}')
+            st.subheader("__RSI__")
+            fig = ti.plot_RSI(df)
+            st.plotly_chart(fig)
+            st.subheader("__OHLC Chart__")
+            fig = ti.ohlc_plot(df)
+            st.plotly_chart(fig)
+            st.subheader("__MACD__")
+            fig = ti.MACD(df)
+            st.plotly_chart(fig)
+            st.subheader("__Trading Strategy__")
+            fig = ti.candlestick_chart(df)
+            st.plotly_chart(fig)
+
+        if option == "Mindtree":
+            stock_sticker = "MINDTREE.NS"
+            df = ti.get_test_data(stock_sticker)            
+            df = ti.add_features(df)
+            X_test, y_test, date_column = ti.prepare_test_set_lstm(df)
+            model = load_model("assets/models/mt.h5")
+            
+            y_pred = model.predict(X_test)
+            fig, ax = plt.subplots(figsize=(15,5))
+            fig = (ti.plot_price(date_column, y_pred, y_test))
+            st.pyplot(fig)
+
+            st.write(f'__Root Mean Squared Error__ = {np.sqrt(metrics.mean_squared_error(y_test, y_pred))}')
+            st.write(f'__Mean Absolute Percentage Error__ = {np.sqrt(metrics.mean_absolute_percentage_error(y_test, y_pred))}')
+            st.subheader("__RSI__")
+            fig = ti.plot_RSI(df)
+            st.plotly_chart(fig)
+            st.subheader("__OHLC Chart__")
+            fig = ti.ohlc_plot(df)
+            st.plotly_chart(fig)
+            st.subheader("__MACD__")
+            fig = ti.MACD(df)
+            st.plotly_chart(fig)
+            st.subheader("__Trading Strategy__")
+            fig = ti.candlestick_chart(df)
+            st.plotly_chart(fig)
